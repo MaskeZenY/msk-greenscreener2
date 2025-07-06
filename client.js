@@ -862,6 +862,254 @@ RegisterCommand('screenshotdecal', async (source, args) => {
     cam = null;
 });
 
+RegisterCommand('screenshotdecalmen', async (source, args) => {
+    // On utilise le modèle homme
+    const modelHash = GetHashKey('mp_m_freemode_01');
+    if (!IsModelValid(modelHash)) return;
+    if (!HasModelLoaded(modelHash)) {
+        RequestModel(modelHash);
+        while (!HasModelLoaded(modelHash)) {
+            await Delay(100);
+        }
+    }
+    SetPlayerModel(playerId, modelHash);
+    await Delay(150);
+    SetModelAsNoLongerNeeded(modelHash);
+    await Delay(150);
+    ped = PlayerPedId();
+    // Positionne le ped
+    SetEntityCoordsNoOffset(ped, config.greenScreenPosition.x, config.greenScreenPosition.y, config.greenScreenPosition.z, false, false, false);
+    SetEntityRotation(ped, config.greenScreenRotation.x, config.greenScreenRotation.y, config.greenScreenRotation.z, 0, false);
+    FreezeEntityPosition(ped, true);
+    //SetPlayerControl(playerId, false);
+    // Applique torse 15, pantalon 11, tête visible
+    SetPedComponentVariation(ped, 3, 15, 0, 0); // Torse nu
+    SetPedComponentVariation(ped, 8, 15, 0, 0); // Undershirt invisible
+    SetPedComponentVariation(ped, 11, 15, 0, 0); // Top invisible
+    SetPedComponentVariation(ped, 4, 11, 0, 0); // Pantalon
+
+    // Immobilise le ped pour qu'il ne bouge pas
+    ClearPedSecondaryTask(ped);
+    ClearPedTasksImmediately(ped);
+    TaskStandStill(ped, -1);
+    FreezeEntityPosition(ped, true);
+
+    // Calcule la position de la caméra une seule fois (devant le torse)
+    const [playerX, playerY, playerZ] = GetEntityCoords(ped);
+    const camZ = playerZ + 0.3; // Ajuste si besoin
+    const camDistance = 1.2;
+    const camHeading = 200; // ou la valeur qui regarde le fond vert
+    const rad = (camHeading + 180) * Math.PI / 180; // Derrière le ped
+    const camX = playerX + Math.sin(rad) * camDistance;
+    const camY = playerY + Math.cos(rad) * camDistance;
+    if (cam) {
+        DestroyAllCams(true);
+        DestroyCam(cam, true);
+        cam = null;
+    }
+    cam = CreateCamWithParams('DEFAULT_SCRIPTED_CAMERA', camX, camY, camZ, 0, 0, camHeading + 180, 55, true, 0);
+    PointCamAtCoord(cam, playerX, playerY, camZ);
+    SetCamActive(cam, true);
+    RenderScriptCams(true, false, 0, true, false, 0);
+    await Delay(50);
+    // Boucle sur les décals (component 10)
+    const component = 10;
+    const drawableVariationCount = GetNumberOfPedDrawableVariations(ped, component);
+    let pedHeading = 334;
+    let stop = false;
+    for (let drawable = 0; drawable < drawableVariationCount && !stop; drawable++) {
+        const textureVariationCount = GetNumberOfPedTextureVariations(ped, component, drawable);
+        let texture = 0;
+        await LoadComponentVariation(ped, component, drawable, texture);
+        await Delay(100);
+        ClearPedTasksImmediately(ped);
+        TaskStandStill(ped, -1);
+        FreezeEntityPosition(ped, true);
+        // Boucle d'attente pour input
+        let taken = false;
+        while (!taken && !stop) {
+            await Delay(0);
+            if (IsControlJustPressed(0, 174)) { // Flèche gauche
+                pedHeading -= 15;
+                SetEntityHeading(ped, pedHeading);
+                await Delay(50);
+                ClearPedTasksImmediately(ped);
+                TaskStandStill(ped, -1);
+            }
+            if (IsControlJustPressed(0, 175)) { // Flèche droite
+                pedHeading += 15;
+                SetEntityHeading(ped, pedHeading);
+                await Delay(50);
+                ClearPedTasksImmediately(ped);
+                TaskStandStill(ped, -1);
+            }
+            if (IsControlJustPressed(0, 172)) { // Flèche haut
+                texture = (texture + 1) % textureVariationCount;
+                await LoadComponentVariation(ped, component, drawable, texture);
+                await Delay(100);
+                ClearPedTasksImmediately(ped);
+                TaskStandStill(ped, -1);
+                SetNotificationTextEntry('STRING');
+                AddTextComponentString(`Texture: ${texture}`);
+                DrawNotification(false, false);
+            }
+            if (IsControlJustPressed(0, 173)) { // Flèche bas
+                texture = (texture - 1 + textureVariationCount) % textureVariationCount;
+                await LoadComponentVariation(ped, component, drawable, texture);
+                await Delay(100);
+                ClearPedTasksImmediately(ped);
+                TaskStandStill(ped, -1);
+                SetNotificationTextEntry('STRING');
+                AddTextComponentString(`Texture: ${texture}`);
+                DrawNotification(false, false);
+            }
+            if (IsControlJustPressed(0, 191)) { // Entrée
+                emitNet('takeScreenshot', `male_10_${drawable}`, 'decal');
+                // Notification screenshot pris X/Y
+                SetNotificationTextEntry('STRING');
+                AddTextComponentString(`Screenshot pris ${drawable + 1}/${drawableVariationCount}`);
+                DrawNotification(false, false);
+                taken = true;
+            }
+            if (IsControlJustPressed(0, 202)) { // Echap pour quitter
+                stop = true;
+            }
+        }
+        await Delay(500); // Laisse le temps au screenshot
+    }
+    // Reset
+    //SetPlayerControl(playerId, true);
+    FreezeEntityPosition(ped, false);
+    DestroyAllCams(true);
+    DestroyCam(cam, true);
+    RenderScriptCams(false, false, 0, true, false, 0);
+    cam = null;
+});
+
+RegisterCommand('screenshotdecalwomen', async (source, args) => {
+    // On utilise le modèle femme
+    const modelHash = GetHashKey('mp_f_freemode_01');
+    if (!IsModelValid(modelHash)) return;
+    if (!HasModelLoaded(modelHash)) {
+        RequestModel(modelHash);
+        while (!HasModelLoaded(modelHash)) {
+            await Delay(100);
+        }
+    }
+    SetPlayerModel(playerId, modelHash);
+    await Delay(150);
+    SetModelAsNoLongerNeeded(modelHash);
+    await Delay(150);
+    ped = PlayerPedId();
+    // Positionne le ped
+    SetEntityCoordsNoOffset(ped, config.greenScreenPosition.x, config.greenScreenPosition.y, config.greenScreenPosition.z, false, false, false);
+    SetEntityRotation(ped, config.greenScreenRotation.x, config.greenScreenRotation.y, config.greenScreenRotation.z, 0, false);
+    FreezeEntityPosition(ped, true);
+    //SetPlayerControl(playerId, false);
+    // Applique torse 15, pantalon 11, tête visible
+    SetPedComponentVariation(ped, 3, 15, 0, 0); // Torse nu
+    SetPedComponentVariation(ped, 8, 15, 0, 0); // Undershirt invisible
+    SetPedComponentVariation(ped, 11, 15, 0, 0); // Top invisible
+    SetPedComponentVariation(ped, 4, 11, 0, 0); // Pantalon
+
+    // Immobilise le ped pour qu'il ne bouge pas
+    ClearPedSecondaryTask(ped);
+    ClearPedTasksImmediately(ped);
+    TaskStandStill(ped, -1);
+    FreezeEntityPosition(ped, true);
+
+    // Calcule la position de la caméra une seule fois (devant le torse)
+    const [playerX, playerY, playerZ] = GetEntityCoords(ped);
+    const camZ = playerZ + 0.3; // Ajuste si besoin
+    const camDistance = 1.2;
+    const camHeading = 200; // ou la valeur qui regarde le fond vert
+    const rad = (camHeading + 180) * Math.PI / 180; // Derrière le ped
+    const camX = playerX + Math.sin(rad) * camDistance;
+    const camY = playerY + Math.cos(rad) * camDistance;
+    if (cam) {
+        DestroyAllCams(true);
+        DestroyCam(cam, true);
+        cam = null;
+    }
+    cam = CreateCamWithParams('DEFAULT_SCRIPTED_CAMERA', camX, camY, camZ, 0, 0, camHeading + 180, 55, true, 0);
+    PointCamAtCoord(cam, playerX, playerY, camZ);
+    SetCamActive(cam, true);
+    RenderScriptCams(true, false, 0, true, false, 0);
+    await Delay(50);
+    // Boucle sur les décals (component 10)
+    const component = 10;
+    const drawableVariationCount = GetNumberOfPedDrawableVariations(ped, component);
+    let pedHeading = 334;
+    let stop = false;
+    for (let drawable = 0; drawable < drawableVariationCount && !stop; drawable++) {
+        const textureVariationCount = GetNumberOfPedTextureVariations(ped, component, drawable);
+        let texture = 0;
+        await LoadComponentVariation(ped, component, drawable, texture);
+        await Delay(100);
+        ClearPedTasksImmediately(ped);
+        TaskStandStill(ped, -1);
+        FreezeEntityPosition(ped, true);
+        // Boucle d'attente pour input
+        let taken = false;
+        while (!taken && !stop) {
+            await Delay(0);
+            if (IsControlJustPressed(0, 174)) { // Flèche gauche
+                pedHeading -= 15;
+                SetEntityHeading(ped, pedHeading);
+                await Delay(50);
+                ClearPedTasksImmediately(ped);
+                TaskStandStill(ped, -1);
+            }
+            if (IsControlJustPressed(0, 175)) { // Flèche droite
+                pedHeading += 15;
+                SetEntityHeading(ped, pedHeading);
+                await Delay(50);
+                ClearPedTasksImmediately(ped);
+                TaskStandStill(ped, -1);
+            }
+            if (IsControlJustPressed(0, 172)) { // Flèche haut
+                texture = (texture + 1) % textureVariationCount;
+                await LoadComponentVariation(ped, component, drawable, texture);
+                await Delay(100);
+                ClearPedTasksImmediately(ped);
+                TaskStandStill(ped, -1);
+                SetNotificationTextEntry('STRING');
+                AddTextComponentString(`Texture: ${texture}`);
+                DrawNotification(false, false);
+            }
+            if (IsControlJustPressed(0, 173)) { // Flèche bas
+                texture = (texture - 1 + textureVariationCount) % textureVariationCount;
+                await LoadComponentVariation(ped, component, drawable, texture);
+                await Delay(100);
+                ClearPedTasksImmediately(ped);
+                TaskStandStill(ped, -1);
+                SetNotificationTextEntry('STRING');
+                AddTextComponentString(`Texture: ${texture}`);
+                DrawNotification(false, false);
+            }
+            if (IsControlJustPressed(0, 191)) { // Entrée
+                emitNet('takeScreenshot', `female_10_${drawable}`, 'decal');
+                // Notification screenshot pris X/Y
+                SetNotificationTextEntry('STRING');
+                AddTextComponentString(`Screenshot pris ${drawable + 1}/${drawableVariationCount}`);
+                DrawNotification(false, false);
+                taken = true;
+            }
+            if (IsControlJustPressed(0, 202)) { // Echap pour quitter
+                stop = true;
+            }
+        }
+        await Delay(500); // Laisse le temps au screenshot
+    }
+    // Reset
+    //SetPlayerControl(playerId, true);
+    FreezeEntityPosition(ped, false);
+    DestroyAllCams(true);
+    DestroyCam(cam, true);
+    RenderScriptCams(false, false, 0, true, false, 0);
+    cam = null;
+});
+
 setImmediate(() => {
 	emit('chat:addSuggestions', [
 		{
@@ -894,6 +1142,18 @@ setImmediate(() => {
 				{name:"primarycolor", help:"The primary vehicle color to take a screenshot of (optional) See: https://wiki.rage.mp/index.php?title=Vehicle_Colors"},
 				{name:"secondarycolor", help:"The secondary vehicle color to take a screenshot of (optional) See: https://wiki.rage.mp/index.php?title=Vehicle_Colors"},
 			]
+		},
+		{
+			name: '/screenshotdecal',
+			help: 'generate decal screenshots (interactive)',
+		},
+		{
+			name: '/screenshotdecalmen',
+			help: 'generate male decal screenshots (interactive)',
+		},
+		{
+			name: '/screenshotdecalwomen',
+			help: 'generate female decal screenshots (interactive)',
 		}
 	])
   });
